@@ -35,6 +35,157 @@ def product(request,id):
         return method_not_allow(request)
 
 
+
+@api_view(["GET","POST"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated,IsSeller])
+def categories(request):
+    if request.method=="GET":
+        return get_all_categories(request)
+    elif request.method=="POST":
+        return post_category(request)
+    else:
+        return method_not_allow(request)
+
+@api_view(["GET","PUT"])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated,IsSeller])
+def category(request,id):
+    if request.method=="GET":
+        return get_by_id_category(request,id)
+    elif request.method=="PUT":
+        return put_category(request,id)
+    else:
+        return method_not_allow(request)
+
+def get_by_id_category(request,id):
+    try:
+        result = Category.objects.get(id=id,seller=request.user)
+    except Category.DoesNotExist:
+        result = None
+
+    if not result :
+        return Response(
+            {
+                "error":"Not Found Category"
+            },status=status.HTTP_404_NOT_FOUND)
+    return Response({
+        "data":{
+            "id":result.id,
+            "name":result.name,
+            "seller":{
+                "id":result.seller.id,
+                "first_name":result.seller.first_name,
+                "last_name":result.seller.last_name
+            },
+            "store":{
+                "id":result.store.id,
+                "name":result.store.name
+            }
+        }
+    },status=status.HTTP_200_OK)
+def get_all_categories(request):
+    results = Category.objects.filter(seller=request.user)
+    if len(results)==0:
+        return Response(
+            {
+                "error":"Not Found Category"
+            },status=status.HTTP_404_NOT_FOUND)
+    return Response({
+        "data":[
+            {
+                "id":result.id,
+                "name":result.name,
+                "seller":{
+                    "id":result.seller.id,
+                    "first_name":result.seller.first_name,
+                    "last_name":result.seller.last_name
+                },
+                "store":{
+                    "id":result.store.id ,
+                    "name":result.store.name
+                }
+
+            } for result in results
+        ]
+    },status=status.HTTP_200_OK)
+
+def post_category(request):
+    data =request.data
+    errors = validate_category(data,"CREATE")
+    if len(errors)>0:
+        return Response({
+            "error":",".join(errors)
+        },status=status.HTTP_400_BAD_REQUEST)
+    store = Store.objects.get(id=data.get("store")["id"])
+    if not store :
+        return Response(
+            {
+                "error":"Not Found Store"
+            },status=status.HTTP_404_NOT_FOUND)
+    c = Category.objects.create(
+        name=data.get("name"),
+        store=store,
+        seller=request.user
+    )
+    c.save()
+    return Response({
+        "data":{
+            "id":c.id,
+            "name":c.name,
+            "store":{
+                "id":c.store.id,
+                "name":c.store.name
+            },
+            "seller":{
+                "id":c.seller.id,
+                "first_name":c.seller.first_name,
+                "last_name":c.seller.last_name
+            }
+        }
+    },status=status.HTTP_201_CREATED)
+
+def put_category(request,id):
+    data =request.data
+    errors = validate_category(data,"UPDATE")
+    if len(errors)>0:
+        return Response({
+            "error":",".join(errors)
+        },status=status.HTTP_400_BAD_REQUEST)
+    store = Store.objects.get(id=data.get("store")["id"])
+    if not store :
+        return Response(
+            {
+                "error":"Not Found Store"
+            },status=status.HTTP_404_NOT_FOUND)
+    try:
+        result = Category.objects.get(id=id,seller=request.user)
+    except Category.DoesNotExist:
+        result = None
+
+    if not result :
+        return Response(
+            {
+                "error":"Not Found Category"
+            },status=status.HTTP_404_NOT_FOUND)
+
+    result.name=data.get("name")
+    result.save()
+    return Response({
+        "data":{
+            "id":result.id,
+            "name":result.name,
+            "store":{
+                "id":result.store.id,
+                "name":result.store.name
+            },
+            "seller":{
+                "id":result.seller.id,
+                "first_name":result.seller.first_name,
+                "last_name":result.seller.last_name
+            }
+        }
+    },status=status.HTTP_200_OK)
 def get_by_id_product(request,id):
     try:
         result = Product.objects.get(id=id,seller=request.user)
@@ -62,6 +213,7 @@ def get_by_id_product(request,id):
             "qty":result.qty
         }
     },status=status.HTTP_200_OK)
+
 def get_all_product(request):
     results = Product.objects.filter(seller=request.user)
     if len(results)==0:
@@ -104,7 +256,7 @@ def delete_product(request,id):
     },status=status.HTTP_200_OK)
 def put_product(request,id):
     data = request.data
-    errors = validate(data,"UPDATE")
+    errors = validate_product(data,"UPDATE")
     if len(errors)>0:
         return Response({
             "error":",".join(errors)
@@ -151,7 +303,7 @@ def put_product(request,id):
 
 def post_product(request):
     data = request.data
-    errors = validate(data,"CREATE")
+    errors = validate_product(data,"CREATE")
     if len(errors)>0:
         return Response({
             "error":",".join(errors)
@@ -214,7 +366,17 @@ def method_not_allow(request):
         },
         status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-def validate(data,mode):
+def validate_category(data,mode):
+    errors = list()
+    if mode == "CREATE":
+        if(not data.get("store")) or (not data.get("store")["id"]):
+            errors.append("Store is required")
+    if(not data.get("name")) or data.get("name")=="":
+        errors.append("Category Name is Required")
+
+    return errors
+
+def validate_product(data,mode):
     errors = list()
     if mode == "CREATE":
         if not data.get("category"):

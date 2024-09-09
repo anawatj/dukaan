@@ -3,6 +3,7 @@ from inventories import views
 
 urlpatterns=[
     path('products/',views.products),
-    path('products/<int:id>/',views.product)
-    #path('<int:id>/',views.store)
+    path('products/<int:id>/',views.product),
+    path('categories/',views.categories),
+    path('categories/<int:id>/',views.category)
 ]
